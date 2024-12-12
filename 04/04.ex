@@ -49,7 +49,7 @@ defmodule Day4 do
     if length(hits) == 2, do: 1, else: 0
   end
 
-  @spec create_directions(integer(), integer()) :: [{integer(), integer()}, ...]
+  @spec create_directions(integer(), integer()) :: [[{integer(), integer()}, ...], ...]
   defp create_directions(row, col) do
     [
       # up
