@@ -55,35 +55,38 @@ defmodule Grid do
   end
 
   def walk(%Grid{} = grid) do
-    # This is stupid, but it works
-    do_walk(grid, MapSet.new([grid.guard_position]), 10_000)
+    do_walk(
+      grid,
+      MapSet.new([grid.guard_position]),
+      MapSet.new([{grid.guard_position, grid.direction}])
+    )
   end
 
-  defp do_walk(_grid, _visited, 0 = _steps_left) do
-    :loop
-  end
-
-  defp do_walk(
-         %Grid{guard_position: {row, col}, max_col: max_col, max_row: max_row},
-         visited,
-         _steps_left
-       )
-       when row < 0 or col < 0 or row > max_row or col > max_col do
-    MapSet.delete(visited, {row, col})
-  end
-
-  defp do_walk(%Grid{} = grid, visited, steps_left) do
+  defp do_walk(%Grid{} = grid, visited, state_cache) do
     {row, col} = grid.guard_position
     {dy, dx} = get_diff(grid.direction)
     maybe_next_position = {row + dy, col + dx}
 
     if maybe_next_position in grid.obstruction_coords do
       grid = turn(grid)
-      do_walk(grid, visited, steps_left - 1)
+      do_walk(grid, visited, state_cache)
     else
-      grid = %Grid{grid | guard_position: maybe_next_position}
-      visited = MapSet.put(visited, maybe_next_position)
-      do_walk(grid, visited, steps_left - 1)
+      {next_row, next_col} = maybe_next_position
+      next_state = {maybe_next_position, grid.direction}
+
+      cond do
+        next_row < 0 or next_col < 0 or next_row > grid.max_row or next_col > grid.max_col ->
+          visited
+
+        next_state in state_cache ->
+          :loop
+
+        true ->
+          grid = %Grid{grid | guard_position: maybe_next_position}
+          visited = MapSet.put(visited, maybe_next_position)
+          state_cache = MapSet.put(state_cache, next_state)
+          do_walk(grid, visited, state_cache)
+      end
     end
   end
 
