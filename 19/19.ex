@@ -9,7 +9,7 @@ defmodule Day19 do
       |> parse()
 
     dbg()
-    Enum.map(designs, &possible?(patterns, &1)) |> Enum.sum()
+    Enum.count(designs, &possible?(patterns, &1))
   end
 
   def parse([patterns, designs]) do
@@ -18,16 +18,16 @@ defmodule Day19 do
     {:ok, {patterns, designs}}
   end
 
-  def possible?(_patterns, ""), do: 1
+  def possible?(_patterns, ""), do: true
 
   def possible?(patterns, design) do
     # Greedy search doesn't work, need to search all candidates
     case Enum.filter(patterns, fn pattern -> String.starts_with?(design, pattern) end) do
       nil ->
-        0
+        false
 
       candidates ->
-        Enum.map(
+        Enum.any?(
           candidates,
           fn candidate ->
             possible?(
@@ -36,7 +36,6 @@ defmodule Day19 do
             )
           end
         )
-        |> Enum.sum()
     end
   end
 end
