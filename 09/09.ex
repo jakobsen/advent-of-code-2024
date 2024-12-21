@@ -1,3 +1,78 @@
+defmodule FileBlock do
+  defstruct value: nil, size: nil, id: nil
+end
+
+defmodule OkayFile do
+  defstruct blocks: []
+
+  def new!(file) when is_list(file) do
+    file
+    |> Stream.with_index()
+    |> Enum.map(fn {number, index} ->
+      case rem(index, 2) do
+        0 -> %FileBlock{value: div(index, 2), size: number, id: make_ref()}
+        1 -> %FileBlock{value: nil, size: number, id: make_ref()}
+      end
+    end)
+    |> then(fn blocks -> %__MODULE__{blocks: blocks} end)
+  end
+
+  def checksum(%__MODULE__{} = file) do
+    Enum.flat_map(file.blocks, fn block ->
+      Stream.repeatedly(fn -> if is_nil(block.value), do: 0, else: block.value end)
+      |> Enum.take(block.size)
+    end)
+    |> Enum.with_index()
+    |> Enum.reduce(0, fn {value, idx}, acc -> acc + value * idx end)
+  end
+
+  def defrag(%__MODULE__{} = file) do
+    # Process the files in reverse order
+    blocks_to_process =
+      file.blocks
+      |> Enum.reject(fn %FileBlock{} = block -> is_nil(block.value) end)
+      |> Enum.reverse()
+
+    do_defrag(file, blocks_to_process)
+  end
+
+  defp do_defrag(%__MODULE__{} = file, []), do: file
+
+  defp do_defrag(%__MODULE__{} = file, [block_to_process | rest]) do
+    # Take the given file block and see if it fits anywhere, i.e. find the first FileBlock with value nil and size
+    # >= the fileblock to replace.
+    # If there is such a block: Put it in front of the nil block, and deduct the size of the file from the size of the nil block.
+    # If the size goes to 0, remove it. Replace the file block with a nil block.
+    old_block_idx = Enum.find_index(file.blocks, &(&1 == block_to_process))
+
+    case Enum.find_index(file.blocks, fn %FileBlock{} = block ->
+           is_nil(block.value) and block.size >= block_to_process.size
+         end) do
+      idx when not is_nil(idx) and idx < old_block_idx ->
+        null_block = Enum.at(file.blocks, idx)
+
+        updated_blocks =
+          List.insert_at(file.blocks, idx, block_to_process)
+          |> List.replace_at(old_block_idx + 1, %{block_to_process | value: nil})
+
+        updated_blocks =
+          case null_block.size - block_to_process.size do
+            0 ->
+              List.delete_at(updated_blocks, idx + 1)
+
+            x ->
+              List.replace_at(updated_blocks, idx + 1, %{null_block | size: x})
+          end
+
+        do_defrag(%__MODULE__{file | blocks: updated_blocks}, rest)
+
+      _ ->
+        # Nowhere to move the block, continue processing without taking any action
+        do_defrag(file, rest)
+    end
+  end
+end
+
 defmodule StupidFile do
   # Should probably use a map for the memory with index as keys, but whatever
   defstruct memory: [], file_size: nil
@@ -69,15 +144,26 @@ end
 
 defmodule Day9 do
   def solve do
-    "input.txt"
-    |> File.read!()
-    |> String.trim()
-    |> String.to_integer()
-    |> Integer.digits()
+    path = "input.txt"
+
+    digits =
+      path
+      |> File.read!()
+      |> String.trim()
+      |> String.to_integer()
+      |> Integer.digits()
+
+    digits
     |> StupidFile.new!()
     |> StupidFile.defrag()
     |> StupidFile.checksum()
     |> IO.inspect(label: "Part 1")
+
+    digits
+    |> OkayFile.new!()
+    |> OkayFile.defrag()
+    |> OkayFile.checksum()
+    |> IO.inspect(label: "Part 2")
   end
 end
 
